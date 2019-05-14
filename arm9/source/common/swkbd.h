@@ -6,24 +6,29 @@
 enum {
     KEY_DUMMY   = 0x80,
     KEY_BKSPC   = 0x81,
-    KEY_ENTER   = 0x82,
-    KEY_CAPS    = 0x83,
-    KEY_SPECIAL = 0x84,
-    KEY_ALPHA   = 0x85,
-    KEY_LEFT    = 0x86,
-    KEY_RIGHT   = 0x87
+    KEY_INSERT  = 0x82,
+    KEY_ENTER   = 0x83,
+    KEY_CAPS    = 0x84,
+    KEY_SPECIAL = 0x85,
+    KEY_ALPHA   = 0x86,
+    KEY_LEFT    = 0x87,
+    KEY_RIGHT   = 0x88,
+    KEY_ESCAPE  = 0x89,
+    KEY_TXTBOX  = 0xFF
 };
 
 // special key strings
-#define SWKBD_KEYSTR "", "DEL", "SUBMIT", "CAPS", "#$@", "ABC", "\x1b", "\x1a"
+#define SWKBD_KEYSTR "", "DEL", "INS", "SUBMIT", "CAPS", "#$@", "ABC", "\x1b", "\x1a", "ESC"
 
 #define COLOR_SWKBD_NORMAL  COLOR_GREY
 #define COLOR_SWKBD_PRESSED COLOR_LIGHTGREY
 #define COLOR_SWKBD_BOX     COLOR_DARKGREY
-#define COLOR_SWKBD_TEXT    COLOR_BLACK
+#define COLOR_SWKBD_TEXTBOX COLOR_DARKGREY
+#define COLOR_SWKBD_CHARS   COLOR_BLACK
 #define COLOR_SWKBD_ENTER   COLOR_TINTEDBLUE
 #define COLOR_SWKBD_CAPS    COLOR_TINTEDYELLOW
 
+#define SWKBD_TEXTBOX_WIDTH 240
 #define SWKBD_STDKEY_WIDTH  18
 #define SWKBD_STDKEY_HEIGHT 20
 #define SWKDB_KEY_SPACING   1
@@ -33,7 +38,7 @@ enum {
     'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '@', KEY_ENTER, \
     'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '(', ')', '[', ']', \
     'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '_', '#', '!', \
-    KEY_CAPS, KEY_SPECIAL, ' ', KEY_LEFT, KEY_RIGHT
+    KEY_CAPS, ' ', KEY_SPECIAL, KEY_LEFT, KEY_RIGHT
 
 #define SWKBD_KEYS_SPECIAL \
     '(', ')', '{', '}', '[', ']', \
@@ -53,7 +58,7 @@ enum {
     12, 51, 0, \
     13, 0, \
     12, 0, \
-    5, 32, 32, 156, 18, 18, 0, \
+    5, 32, 156, 32, 18, 18, 0, \
     0
 
 #define SWKBD_LAYOUT_SPECIAL \

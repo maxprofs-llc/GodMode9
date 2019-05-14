@@ -114,7 +114,7 @@ TouchBox* TouchBoxGet(u32* id, const u16 x, const u16 y, const TouchBox* tbs, co
         if ((x >= tb->x) && (y >= tb->y) &&
             (x < tb->x + tb->w) && (y < tb->y + tb->h)) {
             if (id) *id = tb->id;
-            return tb;
+            return (TouchBox*) tb; // we know const is discarded here
         }
     }
 

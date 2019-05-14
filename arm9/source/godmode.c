@@ -2049,7 +2049,7 @@ u32 GodMode(int entrypoint) {
     
     InitSDCardFS();
     AutoEmuNandBase(true);
-    InitNandCrypto(entrypoint != ENTRY_B9S);
+    InitNandCrypto(true); // (entrypoint != ENTRY_B9S);
     InitExtFS();
     CalibrateTouchFromFlash(); // !!! this may need some further checking
     
@@ -2540,7 +2540,9 @@ u32 GodMode(int entrypoint) {
                         Paint9();
                         break;
                     } else if (testsel == 3) {
-                        ShowKeyboard(NULL, 0, "test");
+                        char inputstr[64] = { 0 };
+                        if (ShowKeyboard(inputstr, 64, "Want to test the swkbd?\nEnter anything you want below:"))
+                            ShowPrompt(false, "You entered: %s", inputstr);
                         break;
                     }
                 } else if (user_select == scripts) {
