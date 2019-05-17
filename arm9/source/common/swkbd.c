@@ -30,7 +30,7 @@ static bool BuildKeyboard(TouchBox* swkbd, const char* keys, const u8* layout) {
     txtbox->x = (SCREEN_WIDTH_BOT - SWKBD_TEXTBOX_WIDTH) / 2;
     txtbox->y = p_y - 30;
     txtbox->w = SWKBD_TEXTBOX_WIDTH;
-    txtbox->h = 10*2;
+    txtbox->h = 30;
     txtbox->id = KEY_TXTBOX;
 
     // set button positions
@@ -72,11 +72,11 @@ static bool BuildKeyboard(TouchBox* swkbd, const char* keys, const u8* layout) {
     return true;
 }
 
-static void DrawKey(const TouchBox* key, const bool pressed, const bool uppercase) {
+static void DrawKey(const TouchBox* key, const bool pressed, const u32 uppercase) {
     const char* keystrs[] = { SWKBD_KEYSTR };
     const u32 color = (pressed) ? COLOR_SWKBD_PRESSED : 
         (key->id == KEY_ENTER) ? COLOR_SWKBD_ENTER :
-        ((key->id == KEY_CAPS) && uppercase) ? COLOR_SWKBD_CAPS :
+        ((key->id == KEY_CAPS) && (uppercase > 1)) ? COLOR_SWKBD_CAPS :
         COLOR_SWKBD_NORMAL;
 
     // don't even try to draw the textbox
@@ -113,7 +113,7 @@ static void DrawKeyBoardBox(TouchBox* swkbd, u32 color) {
     DrawRectangle(BOT_SCREEN, x0-1, y0-1, x1-x0+2, y1-y0+2, color);
 }
 
-static void DrawKeyBoard(TouchBox* swkbd, const bool uppercase) {
+static void DrawKeyBoard(TouchBox* swkbd, const u32 uppercase) {
     // we need to make sure to skip the textbox here(first entry)
 
     // draw keyboard
@@ -130,9 +130,8 @@ static void DrawTextBox(const TouchBox* txtbox, const char* inputstr, const u32 
     
     // fix scroll
     if (cursor < *scroll) *scroll = cursor;
-    else if (cursor - *scroll >= input_shown) *scroll = cursor - input_shown + 1;
-    while (*scroll && (inputstr_size - *scroll < input_shown)) (*scroll)--;
-
+    else if (cursor - *scroll > input_shown) *scroll = cursor - input_shown;
+        
     // draw input string
     DrawStringF(BOT_SCREEN, x, y, COLOR_STD_FONT, COLOR_STD_BG, "%c%-*.*s%-*.*s%c",
         (*scroll) ? '<' : '|',
@@ -142,7 +141,7 @@ static void DrawTextBox(const TouchBox* txtbox, const char* inputstr, const u32 
         (inputstr_size > input_shown) ? 0 : input_shown - inputstr_size,
         (inputstr_size > input_shown) ? 0 : input_shown - inputstr_size,
         "",
-        (inputstr_size - *scroll > input_shown) ? '>' : '|'
+        (inputstr_size - (s32) *scroll > input_shown) ? '>' : '|'
     );
     
     // draw cursor
@@ -158,22 +157,31 @@ static void DrawTextBox(const TouchBox* txtbox, const char* inputstr, const u32 
 
 static void MoveTextBoxCursor(const TouchBox* txtbox, const char* inputstr, const u32 max_size, u32* cursor, u32* scroll) {
     const u32 input_shown = (txtbox->w / FONT_WIDTH_EXT) - 2;
-    const u32 scroll_cooldown = 128;
+    const u64 scroll_cooldown = 144;
+    u64 timer = timer_start();
     u32 id = 0;
     u16 x, y;
 
     // process touch input
     while(HID_ReadTouchState(&x, &y)) {
-        TouchBox* tb = TouchBoxGet(&id, x, y, txtbox, 0);
+        const TouchBox* tb = TouchBoxGet(&id, x, y, txtbox, 0);
         if (id == KEY_TXTBOX) {
-            u16 cpos = ((x-tb->x) + (FONT_WIDTH_EXT/2)) / FONT_WIDTH_EXT;
-            u32 cursor_next = *scroll + cpos;
+            u16 x_tb = x - tb->x;
+            u16 cpos = (x_tb < (FONT_WIDTH_EXT/2)) ? 0 : (x_tb - (FONT_WIDTH_EXT/2)) / FONT_WIDTH_EXT;
+            u32 cursor_next = *scroll + ((cpos <= input_shown) ? cpos : input_shown);
+            // move cursor to position pointed to
             if (*cursor != cursor_next) {
-                if (cursor_next < (max_size-1)) *cursor = cursor_next;
+                if (cursor_next < max_size) *cursor = cursor_next;
                 DrawTextBox(txtbox, inputstr, *cursor, scroll);
+                timer = timer_start();
             }
             // move beyound visible field
-            // blub!
+            if (timer_msec(timer) >= scroll_cooldown) {
+                if ((cpos == 0) && (*scroll > 0))
+                    (*scroll)--;
+                else if ((cpos >= input_shown) && (*cursor < (max_size-1)))
+                    (*scroll)++;
+            }
         }
     }
 }
@@ -197,7 +205,7 @@ static char KeyboardWait(TouchBox* swkbd, bool uppercase) {
 
     // process touch input
     while(HID_ReadTouchState(&x, &y)) {
-        TouchBox* tb = TouchBoxGet(&id, x, y, swkbd, 0);
+        const TouchBox* tb = TouchBoxGet(&id, x, y, swkbd, 0);
         if (tb) {
             if (id == KEY_TXTBOX) break; // immediately break on textbox
             DrawKey(tb, true, uppercase);
@@ -212,20 +220,19 @@ static char KeyboardWait(TouchBox* swkbd, bool uppercase) {
 bool ShowKeyboard(char* inputstr, const u32 max_size, const char *format, ...) {
     const char keys_alphabet[] = { SWKBD_KEYS_ALPHABET };
     const char keys_special[] = { SWKBD_KEYS_SPECIAL };
+    const char keys_numpad[] = { SWKBD_KEYS_NUMPAD };
     const u8 layout_alphabet[] = { SWKBD_LAYOUT_ALPHABET };
     const u8 layout_special[] = { SWKBD_LAYOUT_SPECIAL };
+    const u8 layout_numpad[] = { SWKBD_LAYOUT_NUMPAD };
     TouchBox swkbd_alphabet[64];
     TouchBox swkbd_special[32];
+    TouchBox swkbd_numpad[32];
+    TouchBox* textbox = swkbd_alphabet; // always use this textbox
 
     // generate keyboards
     if (!BuildKeyboard(swkbd_alphabet, keys_alphabet, layout_alphabet)) return false;
     if (!BuildKeyboard(swkbd_special, keys_special, layout_special)) return false;
-
-    // draw keyboard
-    ClearScreen(BOT_SCREEN, COLOR_STD_BG);
-    DrawKeyBoardBox(swkbd_alphabet, COLOR_SWKBD_BOX);
-    DrawKeyBoard(swkbd_alphabet, false);
-    DrawTextBox(swkbd_alphabet, inputstr, 0, 0);
+    if (!BuildKeyboard(swkbd_numpad, keys_numpad, layout_numpad)) return false;
 
     // (instructional) text
     char str[512] = { 0 }; // arbitrary limit, should be more than enough
@@ -235,23 +242,35 @@ bool ShowKeyboard(char* inputstr, const u32 max_size, const char *format, ...) {
     va_end(va);
     u32 str_width = GetDrawStringWidth(str);
     if (str_width < (24 * FONT_WIDTH_EXT)) str_width = 24 * FONT_WIDTH_EXT;
-    u32 str_x = (str_width >= SCREEN_WIDTH_MAIN) ? 0 : (SCREEN_WIDTH_MAIN - str_width) / 2;
-    DrawStringF(MAIN_SCREEN, str_x, 20, COLOR_STD_FONT, COLOR_STD_BG, "%s", str);
+    u32 str_x = (str_width >= SCREEN_WIDTH_BOT) ? 0 : (SCREEN_WIDTH_BOT - str_width) / 2;
+    ClearScreen(BOT_SCREEN, COLOR_STD_BG);
+    DrawStringF(BOT_SCREEN, str_x, 20, COLOR_STD_FONT, COLOR_STD_BG, "%s", str);
 
     // handle keyboard
     u32 uppercase = 0; // 1 -> uppercase once, 2 -> uppercase always
     u32 scroll = 0;
     u32 cursor = 0;
     u32 inputstr_size = strnlen(inputstr, max_size);
+    TouchBox* swkbd_prev = NULL;
+    TouchBox* swkbd = swkbd_alphabet;
     bool ret = false;
     while (true) {
-        char key = KeyboardWait(swkbd_alphabet, uppercase);
+        // draw keyboard if required
+        if (swkbd != swkbd_prev) {
+            DrawKeyBoardBox(swkbd, COLOR_SWKBD_BOX);
+            DrawKeyBoard(swkbd, uppercase);
+            DrawTextBox(textbox, inputstr, cursor, &scroll);
+            swkbd_prev = swkbd;
+        }
+
+        // handle user input
+        char key = KeyboardWait(swkbd, uppercase);
         if (key == KEY_INSERT) key = ' '; // impromptu replacement
         if (key == KEY_TXTBOX) {
-            MoveTextBoxCursor(swkbd_alphabet, inputstr, max_size, &cursor, &scroll);
+            MoveTextBoxCursor(textbox, inputstr, max_size, &cursor, &scroll);
         } else if (key == KEY_CAPS) {
             uppercase = (uppercase + 1) % 3;
-            if (uppercase < 2) DrawKeyBoard(swkbd_alphabet, uppercase);
+            DrawKeyBoard(swkbd, uppercase);
             continue;
         } else if (key == KEY_ENTER) {
             ret = true;
@@ -268,6 +287,12 @@ bool ShowKeyboard(char* inputstr, const u32 max_size, const char *format, ...) {
             if (cursor) cursor--;
         } else if (key == KEY_RIGHT) {
             if (cursor < (max_size-1)) cursor++;
+        } else if (key == KEY_ALPHA) {
+            swkbd = swkbd_alphabet;
+        } else if (key == KEY_SPECIAL) {
+            swkbd = swkbd_special;
+        } else if (key == KEY_NUMPAD) {
+            swkbd = swkbd_numpad;
         } else if (key && (key < 0x80)) {
             if ((cursor < (max_size-1)) && (inputstr_size < max_size)) {
                 // pad string (if cursor beyound string size)
@@ -285,12 +310,12 @@ bool ShowKeyboard(char* inputstr, const u32 max_size, const char *format, ...) {
             }
             if (uppercase == 1) {
                 uppercase = 0;
-                DrawKeyBoard(swkbd_alphabet, uppercase);
+                DrawKeyBoard(swkbd, uppercase);
             }
         }
 
         // update text
-        DrawTextBox(swkbd_alphabet, inputstr, cursor, &scroll);
+        DrawTextBox(textbox, inputstr, cursor, &scroll);
     }
 
     ClearScreen(BOT_SCREEN, COLOR_STD_BG);
